@@ -1,80 +1,111 @@
 import { Router, Response } from 'express'
-import db from '../db.js'
+import { supabaseAdmin } from '../db.js'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth.js'
 
 const router = Router()
-
 router.use(authMiddleware)
 
-// Get pending reminders - admin sees all, user sees their own
-router.get('/pending', (req: AuthRequest, res: Response) => {
+// Helper: extract single friend object from Supabase nested select
+function getFriend(p: any): { name: string; phone: string } {
+  const f = p.friends
+  return Array.isArray(f) ? (f[0] || { name: '', phone: '' }) : (f || { name: '', phone: '' })
+}
+
+// Get pending reminders
+router.get('/pending', async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'admin'
   const currentMonth = new Date().toISOString().slice(0, 7)
+  const today = new Date().toISOString().split('T')[0]
 
   if (isAdmin) {
-    const reminders = db.prepare(`
-      SELECT 
-        p.id as purchase_id,
-        p.friend_id,
-        f.name as friend_name,
-        f.phone as friend_phone,
-        p.name as purchase_name,
-        p.monthly_payment,
-        p.total_amount,
-        p.months_paid,
-        p.total_months,
-        CASE 
-          WHEN p.months_paid < p.total_months THEN 
-            date(p.start_date, '+' || (p.months_paid + 1) || ' months')
-          ELSE NULL 
-        END as next_due_date
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE p.months_paid < p.total_months
-        AND f.phone != ''
-        AND p.id NOT IN (
-          SELECT purchase_id FROM reminders WHERE month_key = ?
-        )
-      ORDER BY f.name, p.name
-    `).all(currentMonth) as any[]
+    const { data: purchases, error } = await supabaseAdmin
+      .from('purchases')
+      .select('id, friend_id, name, monthly_payment, total_amount, months_paid, total_months, start_date, friends!inner(name, phone)')
+      .lt('months_paid', 'total_months')
+      .neq('friends.phone', '')
+      .order('friends.name')
+
+    if (error) return res.status(500).json({ error: error.message })
+
+    const { data: reminded } = await supabaseAdmin
+      .from('reminders')
+      .select('purchase_id')
+      .eq('month_key', currentMonth)
+
+    const remindedIds = new Set(reminded?.map((r: any) => r.purchase_id) || [])
+
+    const reminders = (purchases || [])
+      .filter((p: any) => !remindedIds.has(p.id))
+      .map((p: any) => {
+        const friend = getFriend(p)
+        const startDate = new Date(p.start_date)
+        const nextDue = new Date(startDate)
+        nextDue.setMonth(nextDue.getMonth() + p.months_paid + 1)
+        return {
+          purchase_id: p.id,
+          friend_id: p.friend_id,
+          friend_name: friend.name,
+          friend_phone: friend.phone,
+          purchase_name: p.name,
+          monthly_payment: p.monthly_payment,
+          total_amount: p.total_amount,
+          months_paid: p.months_paid,
+          total_months: p.total_months,
+          next_due_date: nextDue.toISOString().split('T')[0],
+        }
+      })
 
     res.json({ reminders })
   } else {
-    // Regular user sees their own active purchases as reminders
-    const reminders = db.prepare(`
-      SELECT 
-        p.id as purchase_id,
-        p.friend_id,
-        f.name as friend_name,
-        f.phone as friend_phone,
-        p.name as purchase_name,
-        p.monthly_payment,
-        p.total_amount,
-        p.months_paid,
-        p.total_months,
-        CASE 
-          WHEN p.months_paid < p.total_months THEN 
-            date(p.start_date, '+' || (p.months_paid + 1) || ' months')
-          ELSE NULL 
-        END as next_due_date,
-        CASE 
-          WHEN p.months_paid < p.total_months AND 
-               date(p.start_date, '+' || (p.months_paid + 1) || ' months') < date('now')
-          THEN 1 ELSE 0 
-        END as is_overdue
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE f.user_id = ?
-        AND p.months_paid < p.total_months
-      ORDER BY is_overdue DESC, next_due_date ASC
-    `).all(req.user!.id) as any[]
+    const { data: friendIds } = await supabaseAdmin
+      .from('friends')
+      .select('id')
+      .eq('user_id', req.user!.id)
+
+    const friendIdList = friendIds?.map((f: any) => f.id) || []
+    if (friendIdList.length === 0) return res.json({ reminders: [] })
+
+    const { data: purchases, error } = await supabaseAdmin
+      .from('purchases')
+      .select('id, friend_id, name, monthly_payment, total_amount, months_paid, total_months, start_date, friends!inner(name, phone)')
+      .in('friend_id', friendIdList)
+      .lt('months_paid', 'total_months')
+      .order('start_date')
+
+    if (error) return res.status(500).json({ error: error.message })
+
+    const reminders = (purchases || []).map((p: any) => {
+      const friend = getFriend(p)
+      const startDate = new Date(p.start_date)
+      const nextDue = new Date(startDate)
+      nextDue.setMonth(nextDue.getMonth() + p.months_paid + 1)
+      const nextDueStr = nextDue.toISOString().split('T')[0]
+      const isOverdue = nextDueStr < today
+
+      return {
+        purchase_id: p.id,
+        friend_id: p.friend_id,
+        friend_name: friend.name,
+        friend_phone: friend.phone,
+        purchase_name: p.name,
+        monthly_payment: p.monthly_payment,
+        total_amount: p.total_amount,
+        months_paid: p.months_paid,
+        total_months: p.total_months,
+        next_due_date: nextDueStr,
+        is_overdue: isOverdue,
+      }
+    }).sort((a: any, b: any) => {
+      if (a.is_overdue !== b.is_overdue) return (b.is_overdue ? 1 : 0) - (a.is_overdue ? 1 : 0)
+      return a.next_due_date.localeCompare(b.next_due_date)
+    })
 
     res.json({ reminders })
   }
 })
 
 // Mark reminders as sent for current month (admin only)
-router.post('/send-all', adminMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/send-all', adminMiddleware, async (req: AuthRequest, res: Response) => {
   const { purchase_ids } = req.body as { purchase_ids: number[] }
 
   if (!purchase_ids || !Array.isArray(purchase_ids) || purchase_ids.length === 0) {
@@ -82,57 +113,70 @@ router.post('/send-all', adminMiddleware, (req: AuthRequest, res: Response) => {
   }
 
   const currentMonth = new Date().toISOString().slice(0, 7)
+  let successCount = 0
 
-  const stmt = db.prepare('INSERT OR IGNORE INTO reminders (purchase_id, month_key) VALUES (?, ?)')
-  const insertMany = db.transaction((ids: number[]) => {
-    for (const id of ids) {
-      stmt.run(id, currentMonth)
-    }
-  })
+  for (const id of purchase_ids) {
+    const { error } = await supabaseAdmin
+      .from('reminders')
+      .upsert({ purchase_id: id, month_key: currentMonth })
+    if (!error) successCount++
+  }
 
-  insertMany(purchase_ids)
-
-  res.json({ success: true, count: purchase_ids.length })
+  res.json({ success: true, count: successCount })
 })
 
 // Get count of pending reminders
-router.get('/count', (req: AuthRequest, res: Response) => {
+router.get('/count', async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'admin'
   const currentMonth = new Date().toISOString().slice(0, 7)
 
   if (isAdmin) {
-    const result = db.prepare(`
-      SELECT COUNT(*) as count
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE p.months_paid < p.total_months
-        AND f.phone != ''
-        AND p.id NOT IN (
-          SELECT purchase_id FROM reminders WHERE month_key = ?
-        )
-    `).get(currentMonth) as any
+    const { data: purchases } = await supabaseAdmin
+      .from('purchases')
+      .select('id, friends!inner(phone)')
+      .lt('months_paid', 'total_months')
+      .neq('friends.phone', '')
 
-    res.json({ count: result.count })
+    const { data: reminded } = await supabaseAdmin
+      .from('reminders')
+      .select('purchase_id')
+      .eq('month_key', currentMonth)
+
+    const remindedIds = new Set(reminded?.map((r: any) => r.purchase_id) || [])
+    const count = (purchases || []).filter((p: any) => !remindedIds.has(p.id)).length
+    res.json({ count })
   } else {
-    // Regular user sees count of their active purchases
-    const result = db.prepare(`
-      SELECT COUNT(*) as count
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE f.user_id = ?
-        AND p.months_paid < p.total_months
-    `).get(req.user!.id) as any
+    const { data: friendIds } = await supabaseAdmin
+      .from('friends')
+      .select('id')
+      .eq('user_id', req.user!.id)
 
-    res.json({ count: result.count })
+    const friendIdList = friendIds?.map((f: any) => f.id) || []
+    if (friendIdList.length === 0) return res.json({ count: 0 })
+
+    const { count, error } = await supabaseAdmin
+      .from('purchases')
+      .select('*', { count: 'exact', head: true })
+      .in('friend_id', friendIdList)
+      .lt('months_paid', 'total_months')
+
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ count: count || 0 })
   }
 })
 
-// Clean old reminders (older than 3 months)
-router.post('/cleanup', adminMiddleware, (_req: AuthRequest, res: Response) => {
-  db.prepare(`
-    DELETE FROM reminders 
-    WHERE month_key < strftime('%Y-%m', 'now', '-3 months')
-  `).run()
+// Clean old reminders
+router.post('/cleanup', adminMiddleware, async (_req: AuthRequest, res: Response) => {
+  const threeMonthsAgo = new Date()
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+  const cutoffKey = threeMonthsAgo.toISOString().slice(0, 7)
+
+  const { error } = await supabaseAdmin
+    .from('reminders')
+    .delete()
+    .lt('month_key', cutoffKey)
+
+  if (error) return res.status(500).json({ error: error.message })
   res.json({ success: true })
 })
 

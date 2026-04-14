@@ -3,11 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - NODE_ENV=production
-    container_name: installment-tracker
-    ports:
-      - "${PORT:-3001}:3001"
+    container_name: installment-app
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -26,14 +22,33 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - app-network
     deploy:
       resources:
         limits:
           memory: 512M
           cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
-    security_opt:
-      - no-new-privileges:true
-    read_only: false
+
+  nginx:
+    image: nginx:alpine
+    container_name: installment-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  app-network:
+    driver: bridge

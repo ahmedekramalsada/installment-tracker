@@ -1,47 +1,58 @@
 import { Router, Response } from 'express'
-import bcrypt from 'bcryptjs'
-import db from '../db.js'
-import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth.js'
+import { loginUser, registerUser, generateToken, authMiddleware, AuthRequest, getProfile } from '../middleware/auth.js'
+import { z } from 'zod'
 
 const router = Router()
 
-router.post('/login', (req: AuthRequest, res: Response) => {
-  const { username, password } = req.body
-  if (!username || !password) {
-    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' })
-  }
-
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' })
-  }
-
-  const token = generateToken({ id: user.id, username: user.username, role: user.role })
-  res.json({ token, user: { id: user.id, username: user.username, role: user.role } })
+const loginSchema = z.object({
+  username: z.string().min(1, 'اسم المستخدم مطلوب'),
+  password: z.string().min(1, 'كلمة المرور مطلوبة'),
 })
 
-router.post('/register', (req: AuthRequest, res: Response) => {
-  const { username, password } = req.body
-  if (!username || !password) {
-    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' })
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' })
-  }
-
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username)
-  if (existing) {
-    return res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' })
-  }
-
-  const hash = bcrypt.hashSync(password, 10)
-  const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(username, hash, 'user')
-  const token = generateToken({ id: result.lastInsertRowid as number, username, role: 'user' })
-  res.json({ token, user: { id: result.lastInsertRowid, username, role: 'user' } })
+const registerSchema = z.object({
+  username: z.string().min(1, 'اسم المستخدم مطلوب'),
+  password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
 })
 
-router.get('/me', authMiddleware, (req: AuthRequest, res: Response) => {
-  const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(req.user!.id)
+router.post('/login', async (req: AuthRequest, res: Response) => {
+  const parseResult = loginSchema.safeParse(req.body)
+  if (!parseResult.success) {
+    return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'بيانات غير صالحة' })
+  }
+
+  const { username, password } = parseResult.data
+  const result = await loginUser(username, password)
+
+  if (result.error || !result.user) {
+    return res.status(401).json({ error: result.error || 'فشل في تسجيل الدخول' })
+  }
+
+  const token = generateToken(result.user!)
+  res.json({ token, user: result.user })
+})
+
+router.post('/register', async (req: AuthRequest, res: Response) => {
+  const parseResult = registerSchema.safeParse(req.body)
+  if (!parseResult.success) {
+    return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'بيانات غير صالحة' })
+  }
+
+  const { username, password } = parseResult.data
+  const result = await registerUser(username, password)
+
+  if (result.error || !result.user) {
+    return res.status(400).json({ error: result.error || 'فشل في التسجيل' })
+  }
+
+  const token = generateToken(result.user!)
+  res.json({ token, user: result.user })
+})
+
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const user = await getProfile(req.user!.id)
+  if (!user) {
+    return res.status(404).json({ error: 'الحساب غير موجود' })
+  }
   res.json({ user })
 })
 

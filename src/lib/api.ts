@@ -4,6 +4,13 @@ function getToken(): string | null {
   return localStorage.getItem('token')
 }
 
+// Global error handler — can be overridden by the toast system
+let globalErrorHandler: ((message: string) => void) | null = null
+
+export function setGlobalErrorHandler(handler: (message: string) => void) {
+  globalErrorHandler = handler
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
@@ -14,11 +21,26 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  const data = await res.json()
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'فشل في الاتصال بالخادم'
+    if (globalErrorHandler) globalErrorHandler(message)
+    throw new Error(message)
+  }
+
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    data = {}
+  }
 
   if (!res.ok) {
-    throw new Error(data.error || 'حدث خطأ ما')
+    const message = data.error || 'حدث خطأ غير متوقع'
+    if (globalErrorHandler) globalErrorHandler(message)
+    throw new Error(message)
   }
 
   return data
@@ -94,6 +116,9 @@ export const api = {
 
   unpayMonth: (id: number) =>
     request<{ purchase: any }>(`/purchases/${id}/unpay`, { method: 'POST' }),
+
+  getPaymentHistory: (id: number) =>
+    request<{ payments: any[] }>(`/purchases/${id}/payments`, { method: 'GET' }),
 
   // Stats
   getStats: () => request<{ stats: any }>('/stats'),

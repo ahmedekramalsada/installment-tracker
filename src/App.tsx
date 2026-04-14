@@ -14,7 +14,7 @@ import { ExportButton } from './components/ExportButton'
 import { ReminderBell } from './components/ReminderBell'
 import {
   LogOut, UserPlus, CreditCard, Sparkles, Shield, User,
-  Search, BarChart3, Calendar as CalendarIcon, Home, Settings, Download,
+  Search, BarChart3, Calendar as CalendarIcon, Home, Settings,
 } from 'lucide-react'
 
 function App() {
@@ -52,7 +52,7 @@ function App() {
       setStats(statsRes.stats)
       setAllPurchases(purchasesRes.purchases)
     } catch {
-      // ignore
+      // Errors are handled by the global error handler (toast)
     } finally {
       setDataLoading(false)
     }
@@ -220,10 +220,7 @@ function App() {
                 <p className="text-slate-400 text-lg mb-4">
                   {isAdmin ? 'لا يوجد أصدقاء بعد' : 'لا توجد مشتريات مسجلة'}
                 </p>
-            {isAdmin && (
-              <ReminderBell isAdmin={isAdmin} />
-            )}
-            {isAdmin && (
+                {isAdmin && (
                   <button
                     onClick={() => setShowAddFriend(true)}
                     className="inline-flex items-center gap-2 py-2.5 px-6 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 text-white font-medium transition-all hover:from-primary-500 hover:to-primary-400"

@@ -117,9 +117,9 @@ export function generateWhatsAppBulkMessage(
 
   active.forEach((p, i) => {
     const remaining = p.total_amount - p.months_paid * p.monthly_payment
-    const monthsLeft = p.total_months - p.months_paid
+    
     const daysUntil = getDaysUntil(p.next_due_date)
-    const isOverdue = p.is_overdue === 1
+    const isOverdue = p.is_overdue || false
     if (isOverdue) hasOverdue = true
     const dueEmoji = getDueEmoji(daysUntil, isOverdue)
 
@@ -176,9 +176,9 @@ export function generateUserSummaryMessage(
 
   active.forEach((p, i) => {
     const remaining = p.total_amount - p.months_paid * p.monthly_payment
-    const monthsLeft = p.total_months - p.months_paid
+    
     const daysUntil = getDaysUntil(p.next_due_date)
-    const isOverdue = p.is_overdue === 1
+    const isOverdue = p.is_overdue || false
     if (isOverdue) hasOverdue = true
     const dueEmoji = getDueEmoji(daysUntil, isOverdue)
     const progress = getProgressPercent(p.months_paid, p.total_months)

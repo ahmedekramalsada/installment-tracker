@@ -69,7 +69,7 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
           notes: '',
           created_at: '',
           next_due_date: r.next_due_date,
-          is_overdue: (r as any).is_overdue || 0,
+          is_overdue: (r as any).is_overdue || false,
         }))
       )
 
@@ -91,7 +91,7 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
   const handleSendOne = (reminder: PendingReminder) => {
     const remaining = reminder.total_amount - reminder.months_paid * reminder.monthly_payment
     const monthsLeft = reminder.total_months - reminder.months_paid
-    const isOverdue = (reminder as any).is_overdue === 1
+    const isOverdue = (reminder as any).is_overdue
 
     const msg = generateWhatsAppMessage(
       reminder.friend_name,
@@ -108,10 +108,17 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
 
     window.open(getWhatsAppLink(reminder.friend_phone, msg), '_blank')
 
-    api.markRemindersSent([reminder.purchase_id]).then(() => {
-      setReminders((prev) => prev.filter((r) => r.purchase_id !== reminder.purchase_id))
-      if (reminders.length <= 1) onSent()
-    })
+    api.markRemindersSent([reminder.purchase_id])
+      .then(() => {
+        setReminders((prev) => {
+          const next = prev.filter((r) => r.purchase_id !== reminder.purchase_id)
+          if (next.length === 0) onSent()
+          return next
+        })
+      })
+      .catch(() => {
+        // Error already shown by global handler
+      })
   }
 
   const totalAmount = reminders.reduce((s, r) => s + r.monthly_payment, 0)
@@ -163,7 +170,6 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
               <div className="space-y-3 mb-4">
                 {reminders.map((r) => {
                   const remaining = r.total_amount - r.months_paid * r.monthly_payment
-                  const monthsLeft = r.total_months - r.months_paid
                   const daysUntil = getDaysUntil(r.next_due_date)
                   const isOverdue = (r as any).is_overdue
 

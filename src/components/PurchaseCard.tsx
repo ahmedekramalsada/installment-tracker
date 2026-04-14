@@ -5,8 +5,9 @@ import {
   getWhatsAppLink, getDaysUntil,
 } from '../lib/utils'
 import { api } from '../lib/api'
+import { useToast } from './Toast'
 import {
-  Check, Plus, Trash2, Pencil, Percent, DollarSign, MessageCircle, AlertTriangle,
+  Check, Plus, Trash2, Pencil, Percent, DollarSign, MessageCircle, AlertTriangle, Loader2,
 } from 'lucide-react'
 import { EditPurchaseModal } from './EditPurchaseModal'
 
@@ -18,33 +19,67 @@ interface Props {
 
 export function PurchaseCard({ purchase, isAdmin, onUpdate }: Props) {
   const [showEdit, setShowEdit] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const { addToast } = useToast()
+
   const percent = getProgressPercent(purchase.months_paid, purchase.total_months)
   const paid = purchase.months_paid * purchase.monthly_payment
   const remaining = purchase.total_amount - paid
   const isPaid = purchase.months_paid >= purchase.total_months
-  const isOverdue = purchase.is_overdue === 1
+  const isOverdue = purchase.is_overdue || false
   const monthsLeft = purchase.total_months - purchase.months_paid
   const daysUntil = getDaysUntil(purchase.next_due_date)
 
   const handlePay = async () => {
-    await api.payMonth(purchase.id)
-    onUpdate()
+    if (actionLoading) return
+    setActionLoading('pay')
+    try {
+      await api.payMonth(purchase.id)
+      addToast('success', 'تم تسجيل الدفعة بنجاح')
+      onUpdate()
+    } catch (err: any) {
+      addToast('error', err.message || 'فشل في تسجيل الدفعة')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleUnpay = async () => {
-    await api.unpayMonth(purchase.id)
-    onUpdate()
+    if (actionLoading) return
+    setActionLoading('unpay')
+    try {
+      await api.unpayMonth(purchase.id)
+      addToast('success', 'تم إلغاء الدفعة')
+      onUpdate()
+    } catch (err: any) {
+      addToast('error', err.message || 'فشل في إلغاء الدفعة')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleDelete = async () => {
+    if (actionLoading) return
     if (!confirm('هل أنت متأكد من حذف هذه المشتريات؟')) return
-    await api.deletePurchase(purchase.id)
-    onUpdate()
+    setActionLoading('delete')
+    try {
+      await api.deletePurchase(purchase.id)
+      addToast('success', 'تم حذف المشتريات')
+      onUpdate()
+    } catch (err: any) {
+      addToast('error', err.message || 'فشل في الحذف')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleWhatsApp = () => {
+    if (!purchase.friend_name) {
+      addToast('error', 'اسم الصديق غير موجود')
+      return
+    }
     const msg = generateWhatsAppMessage(
-      purchase.friend_name || '',
+      purchase.friend_name,
       purchase.name,
       purchase.monthly_payment,
       remaining,
@@ -57,6 +92,8 @@ export function PurchaseCard({ purchase, isAdmin, onUpdate }: Props) {
     )
     window.open(getWhatsAppLink('', msg), '_blank')
   }
+
+  const isLoading = (action: string) => actionLoading === action
 
   return (
     <>
@@ -83,42 +120,47 @@ export function PurchaseCard({ purchase, isAdmin, onUpdate }: Props) {
             <div className="flex gap-1">
               <button
                 onClick={() => setShowEdit(true)}
-                className="w-7 h-7 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 flex items-center justify-center text-blue-400 transition-colors"
+                disabled={!!actionLoading}
+                className="w-7 h-7 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 flex items-center justify-center text-blue-400 transition-colors disabled:opacity-50"
                 title="تعديل"
               >
-                <Pencil className="w-4 h-4" />
+                {isLoading('edit') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
               </button>
               {!isPaid && (
                 <button
                   onClick={handlePay}
-                  className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center text-emerald-400 transition-colors"
+                  disabled={!!actionLoading}
+                  className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center text-emerald-400 transition-colors disabled:opacity-50"
                   title="تسجيل دفعة"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isLoading('pay') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 </button>
               )}
               {purchase.months_paid > 0 && !isPaid && (
                 <button
                   onClick={handleUnpay}
-                  className="w-7 h-7 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 flex items-center justify-center text-amber-400 transition-colors"
+                  disabled={!!actionLoading}
+                  className="w-7 h-7 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 flex items-center justify-center text-amber-400 transition-colors disabled:opacity-50"
                   title="إلغاء دفعة"
                 >
-                  <Check className="w-4 h-4" />
+                  {isLoading('unpay') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </button>
               )}
               <button
                 onClick={handleWhatsApp}
-                className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center text-emerald-400 transition-colors"
+                disabled={!!actionLoading}
+                className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center text-emerald-400 transition-colors disabled:opacity-50"
                 title="تذكير واتساب"
               >
                 <MessageCircle className="w-4 h-4" />
               </button>
               <button
                 onClick={handleDelete}
-                className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center text-red-400 transition-colors"
+                disabled={!!actionLoading}
+                className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center text-red-400 transition-colors disabled:opacity-50"
                 title="حذف"
               >
-                <Trash2 className="w-4 h-4" />
+                {isLoading('delete') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </button>
             </div>
           )}
@@ -180,7 +222,6 @@ export function PurchaseCard({ purchase, isAdmin, onUpdate }: Props) {
           </div>
         </div>
 
-        {/* Due date info */}
         {!isPaid && purchase.next_due_date && (
           <div className={`text-xs text-center mt-2 ${
             isOverdue ? 'text-red-400' : daysUntil <= 7 ? 'text-amber-400' : 'text-slate-500'

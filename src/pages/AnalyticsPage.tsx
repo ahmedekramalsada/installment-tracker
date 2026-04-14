@@ -71,7 +71,7 @@ export function AnalyticsPage() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                label={({ name, percent }: any) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
                 outerRadius={100}
                 dataKey="value"
               >
@@ -79,7 +79,7 @@ export function AnalyticsPage() {
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
             </PieChart>
           </ResponsiveContainer>
         ) : (
@@ -96,7 +96,7 @@ export function AnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
               <Legend />
               <Bar dataKey="المتوقع" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="المحصّل" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -116,7 +116,7 @@ export function AnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
               <Legend />
               <Area type="monotone" dataKey="المدفوع" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
               <Area type="monotone" dataKey="المتبقي" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />

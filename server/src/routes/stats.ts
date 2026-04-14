@@ -1,148 +1,182 @@
 import { Router, Response } from 'express'
-import db from '../db.js'
+import { supabaseAdmin } from '../db.js'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth.js'
 
 const router = Router()
-
 router.use(authMiddleware)
 
-router.get('/', (req: AuthRequest, res: Response) => {
-  let totalAmount = 0, totalPaid = 0, totalRemaining = 0, totalFees = 0, totalInterest = 0
+// Safe numeric conversion
+function num(val: any): number {
+  const n = parseFloat(val)
+  return isNaN(n) ? 0 : n
+}
+
+router.get('/', async (req: AuthRequest, res: Response) => {
+  let totalAmount = 0, totalPaid = 0, totalFees = 0
   let friendsCount = 0, purchasesCount = 0, overdueCount = 0
-  let creditLimit = 0, creditUsed = 0
+  let creditLimit = 0
 
   if (req.user!.role === 'admin') {
-    const stats = db.prepare(`
-      SELECT 
-        (SELECT COUNT(*) FROM friends) as friends_count,
-        COUNT(p.id) as purchases_count,
-        COALESCE(SUM(p.total_amount), 0) as total_amount,
-        COALESCE(SUM(p.months_paid * p.monthly_payment), 0) as total_paid,
-        COALESCE(SUM(p.fees), 0) as total_fees
-      FROM purchases p
-    `).get() as any
+    const { count: fCount } = await supabaseAdmin
+      .from('friends')
+      .select('*', { count: 'exact', head: true })
+    friendsCount = fCount || 0
 
-    const overdue = db.prepare(`
-      SELECT COUNT(*) as overdue_count
-      FROM purchases p
-      WHERE p.months_paid < p.total_months 
-        AND date(p.start_date, '+' || (p.months_paid + 1) || ' months') < date('now')
-    `).get() as any
+    const { data: purchaseStats, error: statsError } = await supabaseAdmin
+      .from('purchases')
+      .select('total_amount, months_paid, monthly_payment, fees')
 
-    const creditLimitRow = db.prepare("SELECT value FROM settings WHERE key = 'credit_limit'").get() as any
+    if (statsError) return res.status(500).json({ error: statsError.message })
 
-    friendsCount = stats.friends_count
-    purchasesCount = stats.purchases_count
-    totalAmount = stats.total_amount
-    totalPaid = stats.total_paid
-    totalFees = stats.total_fees
-    totalRemaining = totalAmount - totalPaid
-    overdueCount = overdue.overdue_count
-    creditLimit = creditLimitRow ? parseFloat(creditLimitRow.value) : 0
-    creditUsed = totalAmount - totalPaid
+    if (purchaseStats && purchaseStats.length > 0) {
+      purchasesCount = purchaseStats.length
+      totalAmount = purchaseStats.reduce((s, p) => s + num(p.total_amount), 0)
+      totalPaid = purchaseStats.reduce((s, p) => s + (num(p.months_paid) * num(p.monthly_payment)), 0)
+      totalFees = purchaseStats.reduce((s, p) => s + num(p.fees), 0)
+    }
+
+    // Overdue count
+    const { data: allPurchases, error: overdueError } = await supabaseAdmin
+      .from('purchases')
+      .select('months_paid, total_months, start_date')
+
+    if (!overdueError && allPurchases) {
+      const today = new Date().toISOString().split('T')[0]
+      overdueCount = allPurchases.filter((p: any) => {
+        if (num(p.months_paid) >= num(p.total_months)) return false
+        const startDate = new Date(p.start_date)
+        if (isNaN(startDate.getTime())) return false
+        const nextDue = new Date(startDate)
+        nextDue.setMonth(nextDue.getMonth() + num(p.months_paid) + 1)
+        return nextDue.toISOString().split('T')[0] < today
+      }).length
+    }
+
+    const { data: creditRow } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', 'credit_limit')
+      .single()
+
+    creditLimit = creditRow ? num(creditRow.value) : 0
   } else {
-    const stats = db.prepare(`
-      SELECT 
-        COUNT(p.id) as purchases_count,
-        COALESCE(SUM(p.total_amount), 0) as total_amount,
-        COALESCE(SUM(p.months_paid * p.monthly_payment), 0) as total_paid,
-        COALESCE(SUM(p.fees), 0) as total_fees
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE f.user_id = ?
-    `).get(req.user!.id) as any
+    const { data: friendIds } = await supabaseAdmin
+      .from('friends')
+      .select('id')
+      .eq('user_id', req.user!.id)
 
-    const overdue = db.prepare(`
-      SELECT COUNT(*) as overdue_count
-      FROM purchases p
-      JOIN friends f ON p.friend_id = f.id
-      WHERE f.user_id = ?
-        AND p.months_paid < p.total_months 
-        AND date(p.start_date, '+' || (p.months_paid + 1) || ' months') < date('now')
-    `).get(req.user!.id) as any
+    const friendIdList = friendIds?.map((f: any) => f.id) || []
+    if (friendIdList.length > 0) {
+      const { data: purchaseStats } = await supabaseAdmin
+        .from('purchases')
+        .select('total_amount, months_paid, monthly_payment, fees')
+        .in('friend_id', friendIdList)
 
-    purchasesCount = stats.purchases_count
-    totalAmount = stats.total_amount
-    totalPaid = stats.total_paid
-    totalFees = stats.total_fees
-    totalRemaining = totalAmount - totalPaid
-    overdueCount = overdue.overdue_count
+      if (purchaseStats && purchaseStats.length > 0) {
+        purchasesCount = purchaseStats.length
+        totalAmount = purchaseStats.reduce((s, p) => s + num(p.total_amount), 0)
+        totalPaid = purchaseStats.reduce((s, p) => s + (num(p.months_paid) * num(p.monthly_payment)), 0)
+        totalFees = purchaseStats.reduce((s, p) => s + num(p.fees), 0)
+      }
+
+      const { data: allPurchases } = await supabaseAdmin
+        .from('purchases')
+        .select('months_paid, total_months, start_date')
+        .in('friend_id', friendIdList)
+
+      if (allPurchases) {
+        const today = new Date().toISOString().split('T')[0]
+        overdueCount = allPurchases.filter((p: any) => {
+          if (num(p.months_paid) >= num(p.total_months)) return false
+          const startDate = new Date(p.start_date)
+          if (isNaN(startDate.getTime())) return false
+          const nextDue = new Date(startDate)
+          nextDue.setMonth(nextDue.getMonth() + num(p.months_paid) + 1)
+          return nextDue.toISOString().split('T')[0] < today
+        }).length
+      }
+    }
   }
 
   res.json({
     stats: {
       totalAmount,
       totalPaid,
-      totalRemaining,
+      totalRemaining: totalAmount - totalPaid,
       totalFees,
-      totalInterest,
+      totalInterest: 0,
       friendsCount,
       purchasesCount,
       overdueCount,
       creditLimit,
-      creditUsed,
+      creditUsed: totalAmount - totalPaid,
     }
   })
 })
 
 // Stats per friend (admin only)
-router.get('/friends', (req: AuthRequest, res: Response) => {
-  if (req.user!.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح' })
-  }
+router.get('/friends', adminMiddleware, async (_req: AuthRequest, res: Response) => {
+  const { data: friends, error: friendsError } = await supabaseAdmin
+    .from('friends')
+    .select('id, name')
 
-  const friendStats = db.prepare(`
-    SELECT 
-      f.id,
-      f.name,
-      COUNT(p.id) as purchases_count,
-      COALESCE(SUM(p.total_amount), 0) as total_amount,
-      COALESCE(SUM(p.months_paid * p.monthly_payment), 0) as total_paid,
-      COALESCE(SUM(p.total_amount - (p.months_paid * p.monthly_payment)), 0) as total_remaining
-    FROM friends f
-    LEFT JOIN purchases p ON p.friend_id = f.id
-    GROUP BY f.id
-    ORDER BY total_remaining DESC
-  `).all()
+  if (friendsError) return res.status(500).json({ error: friendsError.message })
+
+  const { data: purchases, error: purchasesError } = await supabaseAdmin
+    .from('purchases')
+    .select('friend_id, total_amount, months_paid, monthly_payment')
+
+  if (purchasesError) return res.status(500).json({ error: purchasesError.message })
+
+  const friendStats = (friends || []).map(f => {
+    const fp = purchases?.filter((p: any) => p.friend_id === f.id) || []
+    const totalAmount = fp.reduce((s, p) => s + num(p.total_amount), 0)
+    const totalPaid = fp.reduce((s, p) => s + (num(p.months_paid) * num(p.monthly_payment)), 0)
+
+    return {
+      id: f.id,
+      name: f.name,
+      purchases_count: fp.length,
+      total_amount: totalAmount,
+      total_paid: totalPaid,
+      total_remaining: totalAmount - totalPaid,
+    }
+  }).sort((a, b) => b.total_remaining - a.total_remaining)
 
   res.json({ friendStats })
 })
 
 // Monthly stats for charts (admin only)
-router.get('/monthly', (req: AuthRequest, res: Response) => {
-  if (req.user!.role !== 'admin') {
-    return res.status(403).json({ error: 'غير مصرح' })
+router.get('/monthly', adminMiddleware, async (_req: AuthRequest, res: Response) => {
+  const { data: purchases, error } = await supabaseAdmin
+    .from('purchases')
+    .select('monthly_payment, total_months, start_date, months_paid')
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  const monthlyMap = new Map<string, number>()
+
+  for (const p of purchases || []) {
+    const startDate = new Date(p.start_date)
+    if (isNaN(startDate.getTime())) continue
+    const totalMonths = num(p.total_months)
+    for (let m = 0; m < totalMonths; m++) {
+      const monthDate = new Date(startDate)
+      monthDate.setMonth(monthDate.getMonth() + m)
+      const monthKey = monthDate.toISOString().slice(0, 7)
+      monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + num(p.monthly_payment))
+    }
   }
 
-  const monthlyStats = db.prepare(`
-    SELECT 
-      month,
-      SUM(monthly_payment) as expected,
-      SUM(monthly_payment) as collected
-    FROM (
-      SELECT 
-        p.monthly_payment,
-        date(p.start_date, '+' || m.month_offset || ' months') as month
-      FROM purchases p
-      CROSS JOIN (
-        SELECT 0 as month_offset UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
-        UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 
-        UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11
-      ) m
-      WHERE m.month_offset < p.total_months
-    )
-    GROUP BY month
-    ORDER BY month
-  `).all() as any[]
+  const monthlyStats = Array.from(monthlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, expected]) => ({ month, expected, collected: expected }))
 
-  const cumulativePaid = db.prepare(`
-    SELECT COALESCE(SUM(months_paid * monthly_payment), 0) as total_paid FROM purchases
-  `).get() as any
+  const totalCollected = (purchases || []).reduce(
+    (sum, p) => sum + (num(p.months_paid) * num(p.monthly_payment)), 0
+  )
 
-  res.json({
-    monthlyStats,
-    totalCollected: cumulativePaid.total_paid,
-  })
+  res.json({ monthlyStats, totalCollected })
 })
 
 export default router

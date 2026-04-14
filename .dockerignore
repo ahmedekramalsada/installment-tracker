@@ -1,53 +1,28 @@
-# Dependencies
 node_modules
-.pnpm-store
-
-# Build output
-dist
-build
-
-# Database
-*.db
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite3
-
-# Logs
-logs
-*.log
 npm-debug.log*
-
-# Git
+yarn-debug.log*
+yarn-error.log*
 .git
 .gitignore
-
-# Docker
-Dockerfile
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# IDE
 .vscode
 .idea
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Tests
-coverage
-*.test.*
-*.spec.*
-
-# Documentation
-README.md
-LICENSE
 *.md
-
-# Environment
+.supabase
 .env
 .env.*
+!.env.example
+server/dist
+coverage
+.nyc_output
+Dockerfile
+docker-compose.yml
+.dockerignore
+QWEN.md
+SUPABASE_SETUP.md
+DEPLOYMENT.md
+docker/
+*.tgz
+vite.config.ts
+tsconfig*.json
+eslint.config.js
+public/sw.js

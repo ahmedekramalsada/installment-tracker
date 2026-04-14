@@ -6,7 +6,7 @@ import { AddPurchaseModal } from './AddPurchaseModal'
 import { ExportButton } from './ExportButton'
 import { exportFriendPDF } from '../lib/export'
 import {
-  Plus, Trash2, ChevronDown, User, AlertTriangle, MessageCircle,
+  Plus, Trash2, ChevronDown, User, AlertTriangle, MessageCircle, Loader2,
 } from 'lucide-react'
 import {
   formatCurrencyShort, generateWhatsAppBulkMessage, getWhatsAppLink,
@@ -40,10 +40,19 @@ export function FriendCard({ friend, isAdmin, searchQuery, onUpdate }: Props) {
     if (expanded) loadPurchases()
   }, [expanded, friend.id])
 
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
   const handleDelete = async () => {
     if (!confirm(`هل أنت متأكد من حذف ${friend.name}؟`)) return
-    await api.deleteFriend(friend.id)
-    onUpdate()
+    setDeleteLoading(true)
+    try {
+      await api.deleteFriend(friend.id)
+      onUpdate()
+    } catch {
+      // Error handled by global handler
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   const total = purchases.reduce((s, p) => s + p.total_amount, 0)
@@ -173,10 +182,11 @@ export function FriendCard({ friend, isAdmin, searchQuery, onUpdate }: Props) {
               {isAdmin && (
                 <button
                   onClick={handleDelete}
-                  className="py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors"
+                  disabled={deleteLoading}
+                  className="py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors disabled:opacity-50"
                   title="حذف الصديق"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 </button>
               )}
             </div>
