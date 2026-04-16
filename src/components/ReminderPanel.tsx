@@ -75,17 +75,15 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
 
       if (msg && group.friend_phone) {
         const url = getWhatsAppLink(group.friend_phone, msg)
-        console.log('Opening WhatsApp:', url)
+        console.log('Phone:', group.friend_phone, 'URL:', url)
         
-        const link = document.createElement('a')
-        link.href = url
-        link.target = '_blank'
-        link.rel = 'noopener noreferrer'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
+        if (url) {
+          window.location.href = url
+        } else {
+          console.error('Invalid URL generated')
+        }
         
-        await new Promise(resolve => setTimeout(resolve, 800))
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     }
 
