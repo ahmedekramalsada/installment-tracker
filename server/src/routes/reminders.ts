@@ -21,8 +21,6 @@ router.get('/pending', async (req: AuthRequest, res: Response) => {
     const { data: purchases, error } = await supabaseAdmin
       .from('purchases')
       .select('id, friend_id, name, monthly_payment, total_amount, months_paid, total_months, start_date, friends!inner(name, phone)')
-      .gt('total_months', 0)
-      .eq('friends.phone', '')
 
     if (error) return res.status(500).json({ error: error.message })
 
@@ -34,7 +32,7 @@ router.get('/pending', async (req: AuthRequest, res: Response) => {
     const remindedIds = new Set(reminded?.map((r: any) => r.purchase_id) || [])
 
     const reminders = (purchases || [])
-      .filter((p: any) => !remindedIds.has(p.id))
+      .filter((p: any) => p.months_paid < p.total_months && !remindedIds.has(p.id))
       .map((p: any) => {
         const friend = getFriend(p)
         const startDate = new Date(p.start_date)
@@ -68,8 +66,6 @@ router.get('/pending', async (req: AuthRequest, res: Response) => {
       .from('purchases')
       .select('id, friend_id, name, monthly_payment, total_amount, months_paid, total_months, start_date, friends!inner(name, phone)')
       .in('friend_id', friendIdList)
-      .lt('months_paid', 'total_months')
-      .order('start_date')
 
     if (error) return res.status(500).json({ error: error.message })
 
