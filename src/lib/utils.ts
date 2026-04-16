@@ -175,14 +175,20 @@ ${warning}🌟 شكراً لتعاملك معنا`
 }
 
 export function getWhatsAppLink(phone: string, message: string): string {
+  if (!phone || phone.trim() === '') return ''
+  
   let cleanPhone = phone.replace(/[^0-9]/g, '')
+  
   if (cleanPhone.startsWith('0')) {
     cleanPhone = cleanPhone.substring(1)
   }
-  if (!cleanPhone.startsWith('20')) {
+  if (!cleanPhone.startsWith('20') && !cleanPhone.startsWith('201')) {
     cleanPhone = '20' + cleanPhone
   }
-  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+  
+  if (cleanPhone.length < 11) return ''
+  
+  return `https://wa.me/${cleanPhone}/?text=${encodeURIComponent(message)}`
 }
 
 export function getMonthName(dateStr: string): string {
