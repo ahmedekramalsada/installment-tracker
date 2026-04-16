@@ -52,7 +52,12 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
   const handleSendAll = async () => {
     setSending(true)
 
-    friendGroups.forEach((group) => {
+    const openWhatsAppLink = (phone: string, msg: string) => {
+      const url = getWhatsAppLink(phone, msg)
+      window.open(url, '_blank')
+    }
+
+    for (const group of friendGroups) {
       const msg = generateWhatsAppBulkMessage(
         group.friend_name,
         group.reminders.map((r) => ({
@@ -74,9 +79,10 @@ export function ReminderPanel({ isAdmin, onClose, onSent }: Props) {
       )
 
       if (msg && group.friend_phone) {
-        window.open(getWhatsAppLink(group.friend_phone, msg), '_blank')
+        openWhatsAppLink(group.friend_phone, msg)
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
-    })
+    }
 
     try {
       await api.markRemindersSent(reminders.map((r) => r.purchase_id))
