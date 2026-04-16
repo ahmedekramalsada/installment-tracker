@@ -62,6 +62,20 @@ export const api = {
 
   me: () => request<{ user: any }>('/auth/me'),
 
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  getUsers: () => request<{ users: any[] }>('/auth/users'),
+
+  resetUserPassword: (userId: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId, newPassword }),
+    }),
+
   // Friends
   getFriends: () => request<{ friends: any[] }>('/friends'),
 

@@ -53,11 +53,15 @@ function getFriendName(p: any): string {
 }
 
 /**
- * Validate ID parameter — must be a valid UUID
+ * Validate ID parameter — accepts integer or UUID
  */
 function validateId(id: string): string | null {
-  // Supabase UUIDs are standard UUIDs
+  // Accept UUID
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return id
+  }
+  // Accept integer
+  if (/^\d+$/.test(id)) {
     return id
   }
   return null

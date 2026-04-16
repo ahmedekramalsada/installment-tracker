@@ -110,3 +110,14 @@ export async function getProfile(userId: string) {
   if (error || !data) return null
   return data
 }
+
+export async function changePassword(userId: string, newPassword: string) {
+  const hash = await bcrypt.hash(newPassword, 10)
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ password_hash: hash })
+    .eq('id', userId)
+
+  if (error) return { error: error.message }
+  return { success: true }
+}

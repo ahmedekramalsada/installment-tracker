@@ -117,15 +117,13 @@ function App() {
               )}
             </div>
             <ReminderBell isAdmin={isAdmin} />
-            {isAdmin && (
-              <button
-                onClick={() => setShowSettings(true)}
-                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                title="الإعدادات"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              title="الإعدادات"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
             <button
               onClick={logout}
               className="w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/20 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors"
@@ -253,9 +251,10 @@ function App() {
         />
       )}
 
-      {showSettings && isAdmin && (
+      {showSettings && (
         <SettingsModal
           currentLimit={stats.creditLimit || 0}
+          isAdmin={isAdmin}
           onClose={() => setShowSettings(false)}
           onSaved={() => {
             setShowSettings(false)

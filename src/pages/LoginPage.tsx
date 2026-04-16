@@ -99,13 +99,7 @@ export function LoginPage() {
           </button>
         </div>
 
-        {isLogin && (
-          <div className="mt-4 text-center">
-            <p className="text-slate-600 text-xs">
-              المسؤول: admin / admin123
-            </p>
-          </div>
-        )}
+        
       </div>
     </div>
   )

@@ -21,9 +21,8 @@ router.get('/pending', async (req: AuthRequest, res: Response) => {
     const { data: purchases, error } = await supabaseAdmin
       .from('purchases')
       .select('id, friend_id, name, monthly_payment, total_amount, months_paid, total_months, start_date, friends!inner(name, phone)')
-      .lt('months_paid', 'total_months')
-      .neq('friends.phone', '')
-      .order('friends.name')
+      .gt('total_months', 0)
+      .eq('friends.phone', '')
 
     if (error) return res.status(500).json({ error: error.message })
 
