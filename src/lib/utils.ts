@@ -220,7 +220,12 @@ ${warning}🌟 شكراً لتعاملك معنا`
 }
 
 export function getWhatsAppLink(phone: string, message: string): string {
-  const cleanPhone = phone.replace(/[^0-9]/g, '')
+  let cleanPhone = phone.replace(/[^0-9]/g, '')
+  if (cleanPhone.startsWith('0')) {
+    cleanPhone = '20' + cleanPhone.substring(1)
+  } else if (!cleanPhone.startsWith('20')) {
+    cleanPhone = '20' + cleanPhone
+  }
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
 }
 
