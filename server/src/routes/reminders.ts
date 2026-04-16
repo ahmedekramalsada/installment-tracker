@@ -132,9 +132,8 @@ router.get('/count', async (req: AuthRequest, res: Response) => {
   if (isAdmin) {
     const { data: purchases } = await supabaseAdmin
       .from('purchases')
-      .select('id, friends!inner(phone)')
-      .lt('months_paid', 'total_months')
-      .neq('friends.phone', '')
+      .select('id, months_paid, total_months, friends!inner(phone)')
+      .eq('friends.phone', '')
 
     const { data: reminded } = await supabaseAdmin
       .from('reminders')
@@ -142,7 +141,7 @@ router.get('/count', async (req: AuthRequest, res: Response) => {
       .eq('month_key', currentMonth)
 
     const remindedIds = new Set(reminded?.map((r: any) => r.purchase_id) || [])
-    const count = (purchases || []).filter((p: any) => !remindedIds.has(p.id)).length
+    const count = (purchases || []).filter((p: any) => p.months_paid < p.total_months && !remindedIds.has(p.id)).length
     res.json({ count })
   } else {
     const { data: friendIds } = await supabaseAdmin
@@ -153,14 +152,14 @@ router.get('/count', async (req: AuthRequest, res: Response) => {
     const friendIdList = friendIds?.map((f: any) => f.id) || []
     if (friendIdList.length === 0) return res.json({ count: 0 })
 
-    const { count, error } = await supabaseAdmin
+    const { data: purchases, error } = await supabaseAdmin
       .from('purchases')
-      .select('*', { count: 'exact', head: true })
+      .select('months_paid, total_months')
       .in('friend_id', friendIdList)
-      .lt('months_paid', 'total_months')
 
     if (error) return res.status(500).json({ error: error.message })
-    res.json({ count: count || 0 })
+    const count = (purchases || []).filter((p: any) => p.months_paid < p.total_months).length
+    res.json({ count })
   }
 })
 
