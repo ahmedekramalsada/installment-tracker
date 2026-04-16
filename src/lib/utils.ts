@@ -44,7 +44,7 @@ export function generateWhatsAppMessage(
   purchaseName: string,
   monthlyPayment: number,
   remaining: number,
-  monthsLeft: number,
+  _monthsLeft: number,
   nextDueDate: string,
   totalAmount?: number,
   monthsPaid?: number,
@@ -52,54 +52,31 @@ export function generateWhatsAppMessage(
   isOverdue?: boolean
 ): string {
   const daysUntil = getDaysUntil(nextDueDate)
-  const dueEmoji = getDueEmoji(daysUntil, isOverdue || false)
-
-  const progressPercent = totalMonths && monthsPaid !== undefined
-    ? getProgressPercent(monthsPaid, totalMonths)
-    : getProgressPercent(totalMonths ? totalMonths - monthsLeft : 0, totalMonths || 1)
 
   const paid = totalAmount ? totalAmount - remaining : 0
 
-  let msg = `━━━━━━━━━━━━━━━
-📋 *تذكير بالتقسيط*
-━━━━━━━━━━━━━━━
+  const header = `╭━━━ *تذكير بالتقسيط* ━━━╮\n┃\n`
 
-مرحبا *${friendName}* 👋
+  const greeting = `┣ 👋 مرحباً ${friendName}\n┃\n`
 
-نود تذكيرك بموعد الدفعة المستحقة:
+  const item = `┣ 📱 ${purchaseName}\n┃ 💰 القسط الشهري: *${formatCurrency(monthlyPayment)}*\n┃ 📅 الموعد: ${formatDateArabic(nextDueDate)}\n┃\n`
 
-📱 *${purchaseName}*
+  const summary = `┣ 📊 ملخص الحساب:\n┃ ├─ المبلغ الإجمالي: ${formatCurrency(totalAmount || remaining)}\n┃ ├─ المدفوع: ${formatCurrency(paid)}\n┃ ├─ المتبقي: *${formatCurrency(remaining)}*\n┃ └─ التقدم: ${getProgressPercent(monthsPaid || 0, totalMonths || 1)}%\n`
 
-💰 القسط الشهري: *${formatCurrency(monthlyPayment)}*
-📅 الموعد: *${formatDateArabic(nextDueDate)}*
-
-━━━━━━━━━━━━━━━
-📊 *ملخص الحساب*
-• المبلغ الإجمالي: ${formatCurrency(totalAmount || remaining)}
-• المدفوع: ${formatCurrency(paid)}
-• المتبقي: *${formatCurrency(remaining)}*
-• الأشهر المتبية: ${monthsLeft} شهر
-• التقدم: ${progressPercent}%
-━━━━━━━━━━━━━━━
-
-${dueEmoji} `
-
+  let status = ''
   if (isOverdue) {
-    msg += `⚠️ *تنبيه: هذه الدفعة متأخرة ${Math.abs(daysUntil)} يوم!*\nيرجى المبادرة بالسداد لتجنب أي رسوم إضافية.`
+    status = `\n┣ ⚠️ تنبيه: الدفعة متأخرة ${Math.abs(daysUntil)} يوم!\n┃ يرجى السداد لتجنب الرسوم.\n`
   } else if (daysUntil === 0) {
-    msg += `الدفعة مستحقة *اليوم!* ⏰`
+    status = `\n┣ ⏰ الدفعة مستحقة *اليوم*\n`
   } else if (daysUntil === 1) {
-    msg += `الدفعة مستحقة *غداً* ⏰`
+    status = `\n┣ ⏰ الدفعة مستحقة *غداً*\n`
   } else {
-    msg += `الدفعة القادمة خلال *${daysUntil} يوم*`
+    status = `\n┣ ⏰ القادمة خلال ${daysUntil} يوم\n`
   }
 
-  msg += `
+  const footer = `┃\n┣ 🌟 شكراً لتعاملك معنا\n┃\n╰━━━━━━━━━━━━━━━━━━━━━╯`
 
-نتمنى لك يوماً سعيداً 🌟
-شكراً لتعاملك معنا`
-
-  return msg
+  return header + greeting + item + summary + status + footer
 }
 
 export function generateWhatsAppBulkMessage(
@@ -111,54 +88,32 @@ export function generateWhatsAppBulkMessage(
 
   let totalMonthly = 0
   let totalRemaining = 0
-  let hasOverdue = false
 
   let itemsMsg = ''
 
   active.forEach((p, i) => {
     const remaining = p.total_amount - p.months_paid * p.monthly_payment
-    
     const daysUntil = getDaysUntil(p.next_due_date)
     const isOverdue = p.is_overdue || false
-    if (isOverdue) hasOverdue = true
     const dueEmoji = getDueEmoji(daysUntil, isOverdue)
 
     totalMonthly += p.monthly_payment
     totalRemaining += remaining
 
-    itemsMsg += `${dueEmoji} *${i + 1}. ${p.name}*
-   💰 القسط: *${formatCurrency(p.monthly_payment)}*
-   📅 الموعد: *${formatDateArabic(p.next_due_date || '')}*
-   ✅ تم سداد: ${p.months_paid}/${p.total_months} (${getProgressPercent(p.months_paid, p.total_months)}%)
-   💵 المتبقي: *${formatCurrency(remaining)}*
-
-`
+    itemsMsg += `${dueEmoji} *${i + 1}. ${p.name}*\n   💰 القسط: *${formatCurrency(p.monthly_payment)}* | 📅 ${formatDateArabic(p.next_due_date || '')}\n   ✅ مدفوع: ${p.months_paid}/${p.total_months} (${getProgressPercent(p.months_paid, p.total_months)}%) | 💵 المتبقي: ${formatCurrency(remaining)}\n\n`
   })
 
-  let warning = ''
-  if (hasOverdue) {
-    warning = `⚠️ *تنبيه: يوجد دفعات متأخرة!*
-يرجى المبادرة بالسداد لتجنب أي رسوم إضافية.
+  const header = `╭━━━ *تذكير بالدفعات* ━━━╮\n┃\n`
 
-`
-  }
+  const greeting = `┣ 👋 مرحباً ${friendName}\n┃\n`
 
-  return `━━━━━━━━━━━━━━━
-📋 *تذكير بالدفعات المستحقة*
-━━━━━━━━━━━━━━━
+  const items = `┣ 📋 دفعات مستحقة:\n┃\n${itemsMsg}`
 
-مرحبا *${friendName}* 👋
+  const summary = `┣ 💰 الإجمالي الشهري: *${formatCurrency(totalMonthly)}*\n┃ 💵 إجمالي المتبقي: *${formatCurrency(totalRemaining)}*\n`
 
-لديك الدفعات التالية مستحقة:
+  const footer = `┃\n┣ 🌟 شكراً لتعاملك معنا\n┃\n╰━━━━━━━━━━━━━━━━━━━━━╯`
 
-━━━━━━━━━━━━━━━
-${itemsMsg}━━━━━━━━━━━━━━━
-
-💵 *إجمالي المطلوب شهرياً: ${formatCurrency(totalMonthly)}*
-💵 *إجمالي المتبقي: ${formatCurrency(totalRemaining)}*
-
-${warning}نتمنى لك يوماً سعيداً 🌟
-شكراً لتعاملك معنا`
+  return header + greeting + items + summary + footer
 }
 
 export function generateUserSummaryMessage(
