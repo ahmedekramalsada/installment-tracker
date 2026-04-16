@@ -91,6 +91,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updatePhone: (phone: string) =>
+    request<{ friend: any }>('/friends/phone', {
+      method: 'PATCH',
+      body: JSON.stringify({ phone }),
+    }),
+
   deleteFriend: (id: number) =>
     request<{ success: boolean }>(`/friends/${id}`, { method: 'DELETE' }),
 

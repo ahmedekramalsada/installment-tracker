@@ -19,6 +19,10 @@ const updateFriendSchema = z.object({
   phone: z.string().max(20).optional(),
 })
 
+const updatePhoneSchema = z.object({
+  phone: z.string().max(20),
+})
+
 // Get all friends (admin) or own friend record (user)
 router.get('/', async (req: AuthRequest, res: Response) => {
   if (req.user!.role === 'admin') {
@@ -124,6 +128,26 @@ router.delete('/:id', adminMiddleware, async (req: AuthRequest, res: Response) =
   const { error } = await supabaseAdmin.from('friends').delete().eq('id', id)
   if (error) return res.status(500).json({ error: error.message })
   res.json({ success: true })
+})
+
+// Update own phone (any logged in user)
+router.patch('/phone', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const parseResult = updatePhoneSchema.safeParse(req.body)
+  if (!parseResult.success) {
+    return res.status(400).json({ error: 'رقم الهاتف غير صالح' })
+  }
+
+  const { phone } = parseResult.data
+
+  const { data: friend, error } = await supabaseAdmin
+    .from('friends')
+    .update({ phone })
+    .eq('user_id', req.user!.id)
+    .select()
+    .single()
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ friend })
 })
 
 export default router

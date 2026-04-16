@@ -90,11 +90,11 @@ export function EditPurchaseModal({ purchase, onClose, onUpdated }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="glass rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="glass rounded-2xl p-4 sm:p-6 w-full max-w-md my-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">

@@ -19,6 +19,9 @@ interface Props {
 
 export function SettingsModal({ currentLimit, isAdmin, onClose, onSaved }: Props) {
   const [creditLimit, setCreditLimit] = useState(currentLimit.toString())
+  const [phone, setPhone] = useState('')
+  const [phoneLoading, setPhoneLoading] = useState(false)
+  const [phoneSuccess, setPhoneSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [users, setUsers] = useState<User[]>([])
@@ -28,11 +31,25 @@ export function SettingsModal({ currentLimit, isAdmin, onClose, onSaved }: Props
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
-  const [activeTab, setActiveTab] = useState<'settings' | 'password' | 'users'>('settings')
+  const [activeTab, setActiveTab] = useState<'phone' | 'settings' | 'password' | 'users'>('phone')
   const [resettingUser, setResettingUser] = useState<string | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [resetError, setResetError] = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
+
+  const handlePhoneChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setPhoneLoading(true)
+    try {
+      await api.updatePhone(phone)
+      setPhoneSuccess('تم تحديث رقم الهاتف بنجاح')
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setPhoneLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (activeTab === 'users') loadUsers()
@@ -118,6 +135,16 @@ export function SettingsModal({ currentLimit, isAdmin, onClose, onSaved }: Props
         </div>
 
         <div className="flex gap-2 mb-6 border-b border-white/10">
+          <button
+            onClick={() => setActiveTab('phone')}
+            className={`py-2 px-4 text-sm font-medium transition-colors ${
+              activeTab === 'phone'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            رقم الهاتف
+          </button>
           {isAdmin && (
             <button
               onClick={() => setActiveTab('settings')}
@@ -153,6 +180,40 @@ export function SettingsModal({ currentLimit, isAdmin, onClose, onSaved }: Props
             </button>
           )}
         </div>
+
+        {activeTab === 'phone' && (
+          <>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4 text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
+            {phoneSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 mb-4 text-emerald-400 text-sm text-center">
+                {phoneSuccess}
+              </div>
+            )}
+            <form onSubmit={handlePhoneChange} className="space-y-4">
+              <div>
+                <label className="block text-slate-400 text-sm mb-1.5">رقم الهاتف</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:border-primary-500/50 transition-colors"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={phoneLoading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-medium transition-all disabled:opacity-50"
+              >
+                {phoneLoading ? 'جاري الحفظ...' : 'حفظ رقم الهاتف'}
+              </button>
+            </form>
+          </>
+        )}
 
         {activeTab === 'settings' && isAdmin && (
           <>
