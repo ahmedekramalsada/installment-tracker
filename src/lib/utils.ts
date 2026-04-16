@@ -182,13 +182,13 @@ export function getWhatsAppLink(phone: string, message: string): string {
   if (cleanPhone.startsWith('0')) {
     cleanPhone = cleanPhone.substring(1)
   }
-  if (!cleanPhone.startsWith('20') && !cleanPhone.startsWith('201')) {
+  if (cleanPhone.startsWith('1') && !cleanPhone.startsWith('20')) {
     cleanPhone = '20' + cleanPhone
   }
   
   if (cleanPhone.length < 11) return ''
   
-  return `https://wa.me/${cleanPhone}/?text=${encodeURIComponent(message)}`
+  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
 }
 
 export function getMonthName(dateStr: string): string {
